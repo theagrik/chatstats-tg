@@ -1,6 +1,6 @@
-# chatstats-tg v1
+# chatstats-tg v2
 # Made by aGrIk
-# 10.05.2022 - 13.05.2022
+# 10.05.2022 - 13.05.2022, 24.06.2022
 
 from json import loads, dumps
 from datetime import datetime
@@ -106,11 +106,14 @@ template = {
         "messages": 0,
         "service": 0,
         "stickers": 0,
+        "symbols_total": 0,
         "mentions": {},
         "words": {},
-        "dates": {}
+        "dates": {},
+        "symbols": {}
     },
     "users": {},
+    "users_symb": {},
     "usernames": {},
     "members": {
         "total": [],
@@ -145,6 +148,7 @@ for message in chat["messages"]:
             if message["actor"] is None: message["actor"] = "Deleted Account"
             if message["actor_id"] not in template["users"].keys():
                 template["users"][message["actor_id"]] = 0
+                template["users_symb"][message["actor_id"]] = 0
                 template["usernames"][message["actor_id"]] = message["actor"]
             template["users"][message["actor_id"]] += 1
     else:
@@ -152,6 +156,7 @@ for message in chat["messages"]:
             if message["from"] is None: message["from"] = "Deleted Account"
             if message["from_id"] not in template["users"].keys():
                 template["users"][message["from_id"]] = 0
+                template["users_symb"][message["from_id"]] = 0
                 template["usernames"][message["from_id"]] = message["from"]
             template["users"][message["from_id"]] += 1
 
@@ -172,9 +177,15 @@ for message in chat["messages"]:
                 else: raw_text += element
             message["text"] = raw_text
         text = message["text"].replace("\n", " ").lower().replace("ё", "е")
-        for punc in list(punctuation): text = text.replace(punc, "")
+        for punc in list(punctuation + "—"): text = text.replace(punc, "")
         for whi in list(whitespace): text = text.replace(whi, " ")
         for dig in list(digits): text = text.replace(dig, " ")
+
+        for symbol in text.replace(" ", ""):
+            if symbol not in template["messages"]["symbols"].keys(): template["messages"]["symbols"][symbol] = 0
+            if not str(message["from_id"]).startswith("channel"): template["users_symb"][message["from_id"]] += 1
+            template["messages"]["symbols"][symbol] += 1
+            template["messages"]["symbols_total"] += 1
 
         text = text.strip().split(" ")
         for pre in list(predlogi):
@@ -241,6 +252,7 @@ ret = f"""{"=" * 10}
 Всего: {template['messages']['total']}
 Сообщений: {template['messages']['messages']}
 Сервисных сообщений: {template['messages']['service']}
+Символов: {template['messages']['symbols_total']}
 Стикеров: {template['messages']['stickers']}
 Словарный запас: {len(template['messages']['words'])}
 
@@ -248,10 +260,14 @@ ret = f"""{"=" * 10}
 Звонков: {template['calls']['total']}
 Общая длительность звонков: {convertint(template['calls']['duration'])}
 
-20 самых популярных слов:
+10 самых популярных слов:
 """
-for word in sorted(template["messages"]["words"], key=template["messages"]["words"].get, reverse=True)[:20]:
+for word in sorted(template["messages"]["words"], key=template["messages"]["words"].get, reverse=True)[:10]:
     ret += f"{word} - {template['messages']['words'][word]} раз\n"
+
+ret += "\n10 самых частых символов:\n"
+for symbol in sorted(template["messages"]["symbols"], key=template["messages"]["symbols"].get, reverse=True)[:10]:
+    ret += f"{symbol} - {template['messages']['symbols'][symbol]} раз ({round(percent(template['messages']['symbols_total'], template['messages']['symbols'][symbol]), 2)}%)\n"
 
 ret += "\n10 самых частых упоминаний:\n"
 for mention in sorted(template["messages"]["mentions"], key=template["messages"]["mentions"].get, reverse=True)[:10]:
@@ -261,12 +277,20 @@ ret += "\n7 дней с наибольшим количеством сообще
 for date in sorted(template["messages"]["dates"], key=template["messages"]["dates"].get, reverse=True)[:7]:
     ret += f"{date} - сообщений: {template['messages']['dates'][date]}\n"
 
-ret += "\nТоп 20 пользователей:\n"
+ret += "\nТоп 20 пользователей по количеству сообщений:\n"
 for user in sorted(template["users"], key=template["users"].get, reverse=True)[:20]:
-    ret += f"{template['usernames'][user]} - сообщений: {template['users'][user]}\n"
+    ret += f"{template['usernames'][user]} - сообщений: {template['users'][user]} ({round(percent(template['messages']['messages'], template['users'][user]), 2)}%)\n"
+
+ret += "\nТоп 20 пользователей по количеству символов:\n"
+for user in sorted(template["users_symb"], key=template["users_symb"].get, reverse=True)[:20]:
+    ret += f"{template['usernames'][user]} - символов: {template['users_symb'][user]} ({round(percent(template['messages']['symbols_total'], template['users_symb'][user]), 2)}%)\n"
 
 ret += f"\nДлительность обработки: {convertint(template['processing_time'])}"
 
 print(ret)
 print("=" * 10)
-print("Статистика в машиночитаемом виде сохранена в файле lastprocessed.json.")
+print("\n\nТоп 250 слов:")
+for word in sorted(template["messages"]["words"], key=template["messages"]["words"].get, reverse=True)[:250]:
+    print(f"{word} - {template['messages']['words'][word]} раз")
+
+print("\nСтатистика в машиночитаемом виде сохранена в файле lastprocessed.json.")
