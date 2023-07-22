@@ -1,6 +1,6 @@
 # chatstats-tg v2
 # Made by aGrIk
-# 10.05.2022 - 13.05.2022, 24.06.2022
+# 10.05.2022 - 13.05.2022, 24.06.2022, 23.07.2023
 
 from json import loads, dumps
 from datetime import datetime
@@ -151,6 +151,15 @@ for message in chat["messages"]:
                 template["users_symb"][message["actor_id"]] = 0
                 template["usernames"][message["actor_id"]] = message["actor"]
             template["users"][message["actor_id"]] += 1
+        else:
+            try:
+                if message["author"] not in template["users"].keys():
+                    template["users"][message["author"]] = 0
+                    template["users_symb"][message["author"]] = 0
+                    template["usernames"][message["author"]] = message["author"]
+                template["users"][message["author"]] += 1
+            except KeyError:
+                pass
     else:
         if not str(message["from_id"]).startswith("channel"):
             if message["from"] is None: message["from"] = "Deleted Account"
@@ -159,6 +168,15 @@ for message in chat["messages"]:
                 template["users_symb"][message["from_id"]] = 0
                 template["usernames"][message["from_id"]] = message["from"]
             template["users"][message["from_id"]] += 1
+        else:
+            try:
+                if message["author"] not in template["users"].keys():
+                    template["users"][message["author"]] = 0
+                    template["users_symb"][message["author"]] = 0
+                    template["usernames"][message["author"]] = message["author"]
+                template["users"][message["author"]] += 1
+            except KeyError:
+                pass
 
     if getdate(message["date"]) not in template["messages"]["dates"].keys(): template["messages"]["dates"][getdate(message["date"])] = 0
     template["messages"]["dates"][getdate(message["date"])] += 1
@@ -236,13 +254,18 @@ writeto(dumps(template, ensure_ascii=False), "lastprocessed.json")
 print("Генерация отчёта...")
 
 n = "\n"
+
+if chat['type'] == "public_channel":
+    type = "канала"
+else:
+    type = "чата"
 ret = f"""{"=" * 10}
-Статистика Telegram-чата "{template['name']}"
+Статистика Telegram-{type} "{template['name']}"
 Дата и время составления: {readableDate(time())}
 
 ОБЩАЯ ИНФОРМАЦИЯ
 Анализируемый промежуток времени: {readableDate(template['start_time'])} - {readableDate(template['end_time'])} ({convertint(template['end_time'] - template['start_time'])})
-Другие названия чата: {n.join(template['names'])}
+Другие названия {type}: {n.join(template['names'])}
 
 УЧАСТНИКИ
 Всего участников: {len(template['members']['total'])}
@@ -277,11 +300,20 @@ ret += "\n7 дней с наибольшим количеством сообще
 for date in sorted(template["messages"]["dates"], key=template["messages"]["dates"].get, reverse=True)[:7]:
     ret += f"{date} - сообщений: {template['messages']['dates'][date]}\n"
 
-ret += "\nТоп 20 пользователей по количеству сообщений:\n"
+ret = ""
+if chat['type'] == "public_channel":
+    ret += "\nТоп 20 авторов по количеству сообщений:\n"
+else:
+    ret += "\nТоп 20 пользователей по количеству сообщений:\n"
+
 for user in sorted(template["users"], key=template["users"].get, reverse=True)[:20]:
     ret += f"{template['usernames'][user]} - сообщений: {template['users'][user]} ({round(percent(template['messages']['messages'], template['users'][user]), 2)}%)\n"
 
-ret += "\nТоп 20 пользователей по количеству символов:\n"
+if chat['type'] == "public_channel":
+    ret += "\nТоп 20 авторов по количеству символов:\n"
+else:
+    ret += "\nТоп 20 пользователей по количеству символов:\n"
+
 for user in sorted(template["users_symb"], key=template["users_symb"].get, reverse=True)[:20]:
     ret += f"{template['usernames'][user]} - символов: {template['users_symb'][user]} ({round(percent(template['messages']['symbols_total'], template['users_symb'][user]), 2)}%)\n"
 
