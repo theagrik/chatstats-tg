@@ -1,7 +1,10 @@
 # chatstats-tg v2
 # Made by aGrIk
 # 10.05.2022 - 13.05.2022, 24.06.2022, 23.07.2023
-
+import json
+import re
+import string
+import traceback
 from json import loads, dumps
 from datetime import datetime
 from time import time
@@ -69,13 +72,41 @@ def convertint(stime):
             ret += " секунды"
     return ret
 
+import json
+
+class EscapeFixingDecoder(json.JSONDecoder):
+    def remove_invalid_escape(self, s, line, column):
+        current_line = 1
+        current_column = 1
+        for i, char in enumerate(s):
+            if current_line == line and current_column == column:
+                return s[:i - 1] + s[i:]
+            if char == '\n':
+                current_line += 1
+                current_column = 1
+            else:
+                current_column += 1
+        return s
+    def decode(self, s, _w=json.decoder.WHITESPACE.match):
+        try:
+            return super().decode(s, _w)
+        except json.JSONDecodeError as e:
+            if "Invalid \escape" in str(e):
+                print("Fixing: " + str(e))
+                pattern = r"line (\d+) column (\d+)"
+                match = re.search(pattern, str(e))
+                fixed_s = self.remove_invalid_escape(s, int(match.group(1)), int(match.group(2))+1)
+                return self.decode(fixed_s, _w)
+
+
 def readff(file):
     try:
-        Ff = open(file, 'r', encoding='UTF-8')
-        Contents = Ff.read()
+        Ff = open(file, 'rb')
+        Contents = Ff.read().decode('utf-8', 'replace')
         Ff.close()
         return Contents
     except:
+        traceback.print_exc()
         return None
 
 def percent(frst, scnd):
@@ -128,7 +159,7 @@ template = {
 
 filename = input("Имя файла: ")
 start_time = time()
-chat = loads(readff(filename))
+chat = json.loads(readff(filename), cls=EscapeFixingDecoder)
 
 print("Запуск обработчика...\n")
 
@@ -300,7 +331,6 @@ ret += "\n7 дней с наибольшим количеством сообще
 for date in sorted(template["messages"]["dates"], key=template["messages"]["dates"].get, reverse=True)[:7]:
     ret += f"{date} - сообщений: {template['messages']['dates'][date]}\n"
 
-ret = ""
 if chat['type'] == "public_channel":
     ret += "\nТоп 20 авторов по количеству сообщений:\n"
 else:
